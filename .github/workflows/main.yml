@@ -42,9 +42,7 @@ jobs:
           vlc-android/libvlcjni/vlc/include
           vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
   libvlc-android-armv8:
-    runs-on:
-      - docker
-      - amd64
+    runs-on: ubuntu-latest
     container:
       image: "$VLC_ANDROID_IMAGE"
     timeout-minutes: 60
@@ -514,9 +512,7 @@ jobs:
           vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/*
           vlc/build/vlc-$SDKNAME-$SHORT_ARCH/include/*
   libvlcsharp-all:
-    runs-on:
-      - docker
-      - amd64
+    runs-on: ubuntu-latest
     container:
       image: "$VLC_DEBIAN_IMAGE"
     timeout-minutes: 60
