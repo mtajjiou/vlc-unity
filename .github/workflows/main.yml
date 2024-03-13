@@ -56,32 +56,50 @@ jobs:
       VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
       ARGS: "/p:UNITY=true"
     steps:
-    - name: Install Git LFS
-      run: |
-        apt-get update && apt-get install -y git-lfs
-        git lfs install
-    - uses: actions/checkout@v4.1.0
-      with:
-        fetch-depth: 20
-        lfs: true
-    - run: wget https://download.visualstudio.microsoft.com/download/pr/17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
-    - run: mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
-    - run: export DOTNET_ROOT=$HOME/dotnet
-    - run: export PATH=$PATH:$HOME/dotnet
-    - run: mkdir tmp && cd tmp && git clone https://code.videolan.org/videolan/LibVLCSharp lvs
-    - run: cd lvs
-    - run: git checkout -f master
-    - run: dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
-    - run: mkdir nightlies
-      if: always()
-    - run: cp -r tmp/lvs/src/LibVLCSharp/bin/Release/netstandard2.0 nightlies
-      if: always()
-    - uses: actions/upload-artifact@v4.1.0
-      if: success()
-      with:
-        name: "${{ github.job }}"
-        retention-days: 14
-        path: nightlies/*
+      - name: Install Git LFS
+        run: |
+          apt-get update && apt-get install -y git-lfs
+          git lfs install
+
+      - uses: actions/checkout@v4.1.0
+        with:
+          fetch-depth: 20
+          lfs: true
+
+      - name: Clone and Build LibVLCSharp
+        run: |
+          # Download and extract .NET SDK
+          wget https://download.visualstudio.microsoft.com/download/pr/17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
+          mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
+      
+          # Set up .NET environment variables
+          export DOTNET_ROOT=$HOME/dotnet
+          export PATH=$PATH:$HOME/dotnet
+      
+          # Clone the LibVLCSharp repository
+          mkdir tmp && cd tmp
+          git clone https://code.videolan.org/videolan/LibVLCSharp.git lvs
+          cd lvs
+      
+          # Check out the master branch or any specific branch/tag you need
+          git checkout master
+      
+          # Build the project
+          dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
+      
+          # Prepare the artifacts
+          mkdir -p ../../nightlies
+          cp -r src/LibVLCSharp/bin/Release/netstandard2.0 ../../nightlies
+      
+          # Navigate back to the initial directory (important for actions that follow)
+          cd ../..
+
+      - uses: actions/upload-artifact@v4.1.0
+        if: success()
+        with:
+          name: "${{ github.job }}"
+          retention-days: 14
+          path: tmp/lvs/nightlies/*
   unity-android-armv8:
     needs:
     - libvlc-android-armv8
