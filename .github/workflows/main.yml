@@ -1,482 +1,1505 @@
-stages:
-    - build-libvlc
-    - build-unity-plugin
-
-variables:
-    VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
-    VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
-    VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
-    VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
-
-.variables-trial: &variables-trial
-    ARGS_TRIAL: -Dwatermark=true
-
-.base-template:
-    tags:
-        - docker
-        - amd64
-    stage: build-libvlc
-    artifacts:
-        paths:
-            - nightlies/*
-        expire_in: 2 weeks
-
-.variables-windows-classic: &variables-windows-classic
-        PLATFORM: windows
-        CROSSFILE: windows-x86_64.txt
-
-.variables-windows-uwp: &variables-windows-uwp
-        PLATFORM: uwp
-
-# ANDROID
-
-.variables-android-armv7: &variables-android-armv7
-        ANDROID_ABI: armeabi-v7a
-
-.variables-android-armv8: &variables-android-armv8
-        ANDROID_ABI: arm64-v8a
-
-.variables-android-x86: &variables-android-x86
-        ANDROID_ABI: x86
-
-.variables-android-x86_64: &variables-android-x86_64
-        ANDROID_ABI: x86_64
-
-.libvlc-android-common:
-    extends: .base-template
-    image:
-        name: $VLC_ANDROID_IMAGE
-    script: |
-        git clone https://code.videolan.org/videolan/vlc-android && cd vlc-android
-        git clone https://code.videolan.org/videolan/libvlcjni && cd libvlcjni
-        git clone https://code.videolan.org/videolan/vlc/ --depth=1
+name: mtajjiou-group/vlc-unity
+on:
+  push:
+  workflow_dispatch:
+concurrency:
+  group: "${{ github.ref }}"
+  cancel-in-progress: true
+jobs:
+  libvlc-android-armv7:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: armeabi-v7a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED-android && cd vlc-android
+        git clone REDACTED && cd libvlcjni
+        git clone REDACTED --depth=1
         git apply ../../patches/no-libvlcjni-build.patch
         cd ..
         ANDROID_HOME=/sdk/android-sdk-linux ./buildsystem/compile.sh -l -b -r -a ${ANDROID_ABI}
-    artifacts:
-        paths:
-            - vlc-android/libvlcjni/libvlc/jni
-            - vlc-android/libvlcjni/vlc/include
-            - vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
-
-.unity-android-common:
-    extends: .base-template
-    image:
-        name: $VLC_ANDROID_IMAGE
-    stage: build-unity-plugin
-    script:
-        - export PATH="$HOME/sandbox/bin:$PATH"
-        - PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
-        - ninja -C build_android_${ANDROID_ABI}
-    artifacts:
-        paths:
-            - vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
-            - vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
-            - vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
-            - build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
-
-# libvlc android
-
-libvlc-android-armv7:
-    extends: .libvlc-android-common
-    variables: *variables-android-armv7
-
-libvlc-android-armv8:
-    extends: .libvlc-android-common
-    variables: *variables-android-armv8
-
-libvlc-android-x86:
-    extends: .libvlc-android-common
-    variables: *variables-android-x86
-
-libvlc-android-x86_64:
-    extends: .libvlc-android-common
-    variables: *variables-android-x86_64
-
-# unity android
-
-unity-android-armv7:
-    extends: .unity-android-common
-    variables: *variables-android-armv7
-    dependencies:
-      - libvlc-android-armv7
-
-unity-android-armv8:
-    extends: .unity-android-common
-    variables: *variables-android-armv8
-    dependencies:
-      - libvlc-android-armv8
-
-unity-android-x86:
-    extends: .unity-android-common
-    variables: *variables-android-x86
-    dependencies:
-      - libvlc-android-x86
-
-unity-android-x86_64:
-    extends: .unity-android-common
-    variables: *variables-android-x86_64
-    dependencies:
-      - libvlc-android-x86_64
-
-unity-android-armv7-trial:
-    extends: .unity-android-common
-    variables:
-      <<: [*variables-android-armv7, *variables-trial]
-    dependencies:
-      - libvlc-android-armv7
-
-unity-android-armv8-trial:
-    extends: .unity-android-common
-    variables:
-      <<: [*variables-android-armv8, *variables-trial]
-    dependencies:
-      - libvlc-android-armv8
-
-# Windows Classic
-
-.libvlc-win-common:
-    tags:
-        - docker
-        - amd64
-    stage: build-libvlc
-    script: |
-        git clone https://code.videolan.org/videolan/vlc/ && cd vlc
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni
+          vlc-android/libvlcjni/vlc/include
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+  libvlc-android-armv8:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: arm64-v8a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED-android && cd vlc-android
+        git clone REDACTED && cd libvlcjni
+        git clone REDACTED --depth=1
+        git apply ../../patches/no-libvlcjni-build.patch
+        cd ..
+        ANDROID_HOME=/sdk/android-sdk-linux ./buildsystem/compile.sh -l -b -r -a ${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni
+          vlc-android/libvlcjni/vlc/include
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+  libvlc-android-x86:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: x86
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED-android && cd vlc-android
+        git clone REDACTED && cd libvlcjni
+        git clone REDACTED --depth=1
+        git apply ../../patches/no-libvlcjni-build.patch
+        cd ..
+        ANDROID_HOME=/sdk/android-sdk-linux ./buildsystem/compile.sh -l -b -r -a ${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni
+          vlc-android/libvlcjni/vlc/include
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+  libvlc-android-x86_64:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: x86_64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED-android && cd vlc-android
+        git clone REDACTED && cd libvlcjni
+        git clone REDACTED --depth=1
+        git apply ../../patches/no-libvlcjni-build.patch
+        cd ..
+        ANDROID_HOME=/sdk/android-sdk-linux ./buildsystem/compile.sh -l -b -r -a ${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni
+          vlc-android/libvlcjni/vlc/include
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+  libvlc-win-x86_64-debug:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      WINE_SDK_PATH: "/usr/include/wine/wine/windows/"
+      ARGS: "-c -z -d -x -a x86_64 -g l"
+      ARTIFACT: vlc-4.0.0-dev-win64-debug.7z
+      BUILD_FOLDER: win64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED && cd vlc
         git apply ../patches/disable-activex.patch
         if [[ $ARGS == *"-w"* ]]; then
             echo "Applying the UWP specific patch"
             git apply ../patches/uwp-plugins-path.patch
         fi
         extras/package/win32/build.sh $ARGS
-    after_script:
-        - mkdir nightlies
-        - cd ./vlc/$BUILD_FOLDER
-        - make package-win-strip
-        - rm -rf vlc-4.0.0-dev/lua/http
-    artifacts:
-        paths:
-            - vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
-            - vlc/${BUILD_FOLDER}/_win32
-        expire_in: 2 weeks
-    variables:
-        WINE_SDK_PATH: /usr/include/wine/wine/windows/
-
-.unity-win-common:
-    image:
-        name: $VLC_WIN_LLVM_IMAGE
-    tags:
-        - docker
-        - amd64
-    stage: build-unity-plugin
-    script:
-        - PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
-        - ninja -C build_${PLATFORM}
-        - mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
-    artifacts:
-        paths:
-            - VLCUnityPlugin.dll
-        expire_in: 2 weeks
-
-libvlc-win-x86_64-debug:
-    extends: .libvlc-win-common
-    image:
-        name: $VLC_WIN_LLVM_IMAGE
-    variables:
-        ARGS: -c -z -d -x -a x86_64 -g l
-        ARTIFACT: vlc-4.0.0-dev-win64-debug.7z
-        BUILD_FOLDER: win64
-
-libvlc-win-x86_64:
-    extends: .libvlc-win-common
-    image:
-        name: $VLC_WIN_LLVM_IMAGE
-    variables:
-        ARGS: -c -z -r -x -a x86_64 -i nope -g l
-        ARTIFACT: vlc-4.0.0-dev-win64.7z
-        BUILD_FOLDER: win64
-
-libvlc-uwp-x64:
-    extends: .libvlc-win-common
-    image:
-        name: $VLC_UWP_LLVM_IMAGE
-    variables:
-        ARGS: -w -u -c -z -r -x -a x86_64 -i nope -S 0x0A000007 -g l
-        ARTIFACT: vlc-4.0.0-dev-win64.7z
-        BUILD_FOLDER: win64-uwp
-
-libvlc-uwp-arm64:
-    extends: .libvlc-win-common
-    image:
-        name: $VLC_UWP_LLVM_IMAGE
-    variables:
-        ARGS: -w -u -c -z -r -x -a aarch64 -i nope -S 0x0A000007 -g l
-        ARTIFACT: vlc-4.0.0-dev-win64.7z
-        BUILD_FOLDER: winarm64-uwp
-
-libvlc-uwp-x64-debug:
-    extends: .libvlc-win-common
-    image:
-        name: $VLC_UWP_LLVM_IMAGE
-    variables:
-        ARGS: -w -u -c -z -d -x -a x86_64 -S 0x0A000007 -g l
-        ARTIFACT: vlc-4.0.0-dev-win64-debug.7z
-        BUILD_FOLDER: win64-uwp
-
-unity-plugin-windows:
-    extends: .unity-win-common
-    dependencies:
-      - libvlc-win-x86_64
-    variables: 
-        <<: [*variables-windows-classic]
-        BUILD_FOLDER: win64
-
-unity-plugin-windows-trial:
-    extends: .unity-win-common
-    dependencies:
-      - libvlc-win-x86_64
-    variables:
-        <<: [*variables-trial, *variables-windows-classic]
-        BUILD_FOLDER: win64
-
-unity-plugin-uwp-x64:
-    extends: .unity-win-common
-    dependencies:
-      - libvlc-uwp-x64
-    variables: 
-        <<: [*variables-windows-uwp]
-        BUILD_FOLDER: win64-uwp
-        CROSSFILE: uwp-x86_64.txt
-
-unity-plugin-uwp-x64-trial:
-    extends: .unity-win-common
-    dependencies:
-      - libvlc-uwp-x64
-    variables:
-        <<: [*variables-trial, *variables-windows-uwp]
-        BUILD_FOLDER: win64-uwp
-        CROSSFILE: uwp-x86_64.txt
-
-unity-plugin-uwp-arm64:
-    extends: .unity-win-common
-    dependencies:
-      - libvlc-uwp-arm64
-    variables: 
-        <<: [*variables-windows-uwp]
-        BUILD_FOLDER: winarm64-uwp
-        CROSSFILE: uwp-arm64.txt
-
-# libvlc mac
-
-.variables-macos-x64: &variables-macos-x64
-        ARCH: x86_64
-        VLC_PATH: /Users/videolanci/sandbox/bin
-
-.variables-macos-aarch64: &variables-macos-aarch64
-        ARCH: aarch64
-        VLC_PATH: /Users/videolanci/sandbox/bin
-
-.libvlc-macos-common:
-    stage: build-libvlc
-    script:
-        - git clone https://code.videolan.org/videolan/vlc && cd vlc   
-        - mkdir build && cd build
-        - ../extras/package/macosx/build.sh ${ARGS} -a ${ARCH}
-        # remove sym files
-        - rm -rf macos-install/lib/libvlc.dylib
-        - rm -rf macos-install/lib/libvlccore.dylib
-        - mv macos-install/lib/libvlc.12.dylib macos-install/lib/libvlc.dylib
-        - mv macos-install/lib/libvlccore.9.dylib macos-install/lib/libvlccore.dylib
-    artifacts:
-        paths:
-            - vlc/build/macos-install/include/*
-            - vlc/build/macos-install/libexec/*
-            - vlc/build/macos-install/lib/pkgconfig/*
-            - vlc/build/macos-install/lib/vlc/**/*.dylib
-            - vlc/build/macos-install/lib/libvlc.dylib
-            - vlc/build/macos-install/lib/libvlccore.dylib
-        expire_in: 2 weeks
-    variables:
-        ARGS: -i z -c -g l
-
-libvlc-macos-x86_64:
-    extends: .libvlc-macos-common
-    variables: *variables-macos-x64
-    tags:
-        - monterey
-        - amd64
-
-libvlc-macos-aarch64:
-    extends: .libvlc-macos-common
-    variables: *variables-macos-aarch64
-    tags:
-        - monterey
-        - macos-m1
-
-# unity plugin mac
-
-.unity-plugin-macos-common:
-    stage: build-unity-plugin
-    script:
-        # patch libvlc.pc to build the plugin
-        - cd vlc/build/macos-install
-        - sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
-        - export PATH="$HOME/sandbox/bin:$PATH"
-        - cd ../../..
-        - PKG_CONFIG_PATH=./vlc/build/macos-install/lib/pkgconfig meson setup build_${ARCH} ${ARGS_TRIAL} --buildtype release
-        - ninja -C build_${ARCH}
-        - mv "build_${ARCH}/PluginSource/libVLCUnityPlugin.1.dylib" "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
-        - install_name_tool -add_rpath @loader_path/ build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
-    artifacts:
-        paths:
-            - "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
-        expire_in: 2 weeks
-
-unity-plugin-macos-x86_64:
-    extends: .unity-plugin-macos-common
-    dependencies:
-        - libvlc-macos-x86_64
-    variables: *variables-macos-x64
-    tags:
-        - monterey
-        - amd64
-
-unity-plugin-macos-x86_64-trial:
-    extends: .unity-plugin-macos-common
-    dependencies:
-        - libvlc-macos-x86_64
-    variables:
-      <<: [*variables-macos-x64, *variables-trial]
-    tags:
-        - monterey
-        - amd64
-
-unity-plugin-macos-aarch64:
-    extends: .unity-plugin-macos-common
-    dependencies:
-        - libvlc-macos-aarch64
-    variables: *variables-macos-aarch64
-    tags:
-        - monterey
-        - macos-m1
-
-unity-plugin-macos-aarch64-trial:
-    extends: .unity-plugin-macos-common
-    dependencies:
-        - libvlc-macos-aarch64
-    variables:
-      <<: [*variables-macos-aarch64, *variables-trial]
-    tags:
-        - monterey
-        - macos-m1
-
-# libvlc iOS
-
-.variables-ios-x64: &variables-ios-x64
-        ARCH: x86_64
-        SDKNAME: iphonesimulator
-        VLC_PATH: /Users/videolanci/sandbox/bin
-        SHORT_ARCH: x86_64
-
-.variables-ios-arm64: &variables-ios-arm64
-        ARCH: aarch64
-        SDKNAME: iphoneos
-        VLC_PATH: /Users/videolanci/sandbox/bin
-        SHORT_ARCH: arm64
-
-.libvlc-ios-common:
-    stage: build-libvlc
-    tags:
-        - monterey
-    script:
-        - git clone https://code.videolan.org/videolan/vlc && cd vlc 
-        - mkdir build && cd build
-        - ../extras/package/apple/build.sh --sdk=$SDKNAME --arch=$ARCH -j8 --enable-shared
-        - cd ../..
-    artifacts:
-        paths:
-            - vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/*
-            - vlc/build/vlc-$SDKNAME-$SHORT_ARCH/include/*
-        expire_in: 2 weeks
-
-libvlc-ios-x86_64:
-    extends: .libvlc-ios-common
-    variables: *variables-ios-x64
-
-libvlc-ios-arm64:
-    extends: .libvlc-ios-common
-    variables: *variables-ios-arm64
-
-# unity plugin iOS
-
-.unity-plugin-ios-common:
-    stage: build-unity-plugin
-    tags:
-        - monterey
-    script:
-        # patch libvlc.pc to build the plugin
-        - cd vlc/build/vlc-$SDKNAME-$SHORT_ARCH
-        - sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
-        - cd ../../..
-        - export PATH="$HOME/sandbox/bin:$PATH"
-        - PKG_CONFIG_PATH=./vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/pkgconfig meson setup --cross-file=cross/$SDKNAME.txt build_${SHORT_ARCH} ${ARGS_TRIAL} --buildtype release
-        - ninja -C build_${SHORT_ARCH}
-        - ./copy_ios.sh vlc/build/vlc-$SDKNAME-$SHORT_ARCH $SHORT_ARCH
-    artifacts:
-        paths:
-            - Assets/VLCUnity/Plugins/iOS
-        expire_in: 2 weeks
-
-unity-plugin-ios-aarch64:
-    extends: .unity-plugin-ios-common
-    variables: *variables-ios-arm64
-    dependencies:
-        - libvlc-ios-arm64
-
-unity-plugin-ios-aarch64-trial:
-    extends: .unity-plugin-ios-common
-    variables:
-      <<: [*variables-ios-arm64, *variables-trial]
-    dependencies:
-        - libvlc-ios-arm64
-
-unity-plugin-ios-x86_64:
-    extends: .unity-plugin-ios-common
-    variables: *variables-ios-x64
-    dependencies:
-        - libvlc-ios-x86_64
-    
-# LibVLCSharp
-
-.libvlcsharp-unity:
-    image:
-        name: $VLC_DEBIAN_IMAGE
-    tags:
-        - docker
-        - amd64
-    stage: build-libvlc
-    script:
-        - wget https://download.visualstudio.microsoft.com/download/pr/17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
-        - mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
-        - export DOTNET_ROOT=$HOME/dotnet
-        - export PATH=$PATH:$HOME/dotnet
-        - mkdir tmp && cd tmp && git clone https://code.videolan.org/videolan/LibVLCSharp lvs
-        - cd lvs
-        - git checkout -f master
-        - dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
-    after_script:
-        - mkdir nightlies
-        - cp -r tmp/lvs/src/LibVLCSharp/bin/Release/netstandard2.0 nightlies
-    artifacts:
-        paths:
-            - nightlies/*
-        expire_in: 2 weeks
-
-libvlcsharp-all:
-    extends: .libvlcsharp-unity
-    variables:
-        ARGS: /p:UNITY=true
-
-libvlcsharp-ios:
-    extends: .libvlcsharp-unity
-    variables:
-        ARGS: /p:UNITY_IOS=true
+    - run: mkdir nightlies
+      if: always()
+    - run: cd ./vlc/$BUILD_FOLDER
+      if: always()
+    - run: make package-win-strip
+      if: always()
+    - run: rm -rf vlc-4.0.0-dev/lua/http
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
+          vlc/${BUILD_FOLDER}/_win32
+  libvlc-win-x86_64:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      WINE_SDK_PATH: "/usr/include/wine/wine/windows/"
+      ARGS: "-c -z -r -x -a x86_64 -i nope -g l"
+      ARTIFACT: vlc-4.0.0-dev-win64.7z
+      BUILD_FOLDER: win64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED && cd vlc
+        git apply ../patches/disable-activex.patch
+        if [[ $ARGS == *"-w"* ]]; then
+            echo "Applying the UWP specific patch"
+            git apply ../patches/uwp-plugins-path.patch
+        fi
+        extras/package/win32/build.sh $ARGS
+    - run: mkdir nightlies
+      if: always()
+    - run: cd ./vlc/$BUILD_FOLDER
+      if: always()
+    - run: make package-win-strip
+      if: always()
+    - run: rm -rf vlc-4.0.0-dev/lua/http
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
+          vlc/${BUILD_FOLDER}/_win32
+  libvlc-uwp-x64:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_UWP_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      WINE_SDK_PATH: "/usr/include/wine/wine/windows/"
+      ARGS: "-w -u -c -z -r -x -a x86_64 -i nope -S 0x0A000007 -g l"
+      ARTIFACT: vlc-4.0.0-dev-win64.7z
+      BUILD_FOLDER: win64-uwp
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED && cd vlc
+        git apply ../patches/disable-activex.patch
+        if [[ $ARGS == *"-w"* ]]; then
+            echo "Applying the UWP specific patch"
+            git apply ../patches/uwp-plugins-path.patch
+        fi
+        extras/package/win32/build.sh $ARGS
+    - run: mkdir nightlies
+      if: always()
+    - run: cd ./vlc/$BUILD_FOLDER
+      if: always()
+    - run: make package-win-strip
+      if: always()
+    - run: rm -rf vlc-4.0.0-dev/lua/http
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
+          vlc/${BUILD_FOLDER}/_win32
+  libvlc-uwp-arm64:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_UWP_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      WINE_SDK_PATH: "/usr/include/wine/wine/windows/"
+      ARGS: "-w -u -c -z -r -x -a aarch64 -i nope -S 0x0A000007 -g l"
+      ARTIFACT: vlc-4.0.0-dev-win64.7z
+      BUILD_FOLDER: winarm64-uwp
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED && cd vlc
+        git apply ../patches/disable-activex.patch
+        if [[ $ARGS == *"-w"* ]]; then
+            echo "Applying the UWP specific patch"
+            git apply ../patches/uwp-plugins-path.patch
+        fi
+        extras/package/win32/build.sh $ARGS
+    - run: mkdir nightlies
+      if: always()
+    - run: cd ./vlc/$BUILD_FOLDER
+      if: always()
+    - run: make package-win-strip
+      if: always()
+    - run: rm -rf vlc-4.0.0-dev/lua/http
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
+          vlc/${BUILD_FOLDER}/_win32
+  libvlc-uwp-x64-debug:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_UWP_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      WINE_SDK_PATH: "/usr/include/wine/wine/windows/"
+      ARGS: "-w -u -c -z -d -x -a x86_64 -S 0x0A000007 -g l"
+      ARTIFACT: vlc-4.0.0-dev-win64-debug.7z
+      BUILD_FOLDER: win64-uwp
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: |
+        git clone REDACTED && cd vlc
+        git apply ../patches/disable-activex.patch
+        if [[ $ARGS == *"-w"* ]]; then
+            echo "Applying the UWP specific patch"
+            git apply ../patches/uwp-plugins-path.patch
+        fi
+        extras/package/win32/build.sh $ARGS
+    - run: mkdir nightlies
+      if: always()
+    - run: cd ./vlc/$BUILD_FOLDER
+      if: always()
+    - run: make package-win-strip
+      if: always()
+    - run: rm -rf vlc-4.0.0-dev/lua/http
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/${BUILD_FOLDER}/vlc-4.0.0-dev
+          vlc/${BUILD_FOLDER}/_win32
+  libvlc-macos-x86_64:
+    runs-on:
+      - self-hosted
+      - monterey
+      - amd64
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS: "-i z -c -g l"
+      ARCH: x86_64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: git clone REDACTED && cd vlc
+    - run: mkdir build && cd build
+    - run: "../extras/package/macosx/build.sh ${ARGS} -a ${ARCH}"
+    - run: rm -rf macos-install/lib/libvlc.dylib
+    - run: rm -rf macos-install/lib/libvlccore.dylib
+    - run: mv macos-install/lib/libvlc.12.dylib macos-install/lib/libvlc.dylib
+    - run: mv macos-install/lib/libvlccore.9.dylib macos-install/lib/libvlccore.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/build/macos-install/include/*
+          vlc/build/macos-install/libexec/*
+          vlc/build/macos-install/lib/pkgconfig/*
+          vlc/build/macos-install/lib/vlc/**/*.dylib
+          vlc/build/macos-install/lib/libvlc.dylib
+          vlc/build/macos-install/lib/libvlccore.dylib
+  libvlc-macos-aarch64:
+    runs-on:
+      - self-hosted
+      - monterey
+      - macos-m1
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS: "-i z -c -g l"
+      ARCH: aarch64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: git clone REDACTED && cd vlc
+    - run: mkdir build && cd build
+    - run: "../extras/package/macosx/build.sh ${ARGS} -a ${ARCH}"
+    - run: rm -rf macos-install/lib/libvlc.dylib
+    - run: rm -rf macos-install/lib/libvlccore.dylib
+    - run: mv macos-install/lib/libvlc.12.dylib macos-install/lib/libvlc.dylib
+    - run: mv macos-install/lib/libvlccore.9.dylib macos-install/lib/libvlccore.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/build/macos-install/include/*
+          vlc/build/macos-install/libexec/*
+          vlc/build/macos-install/lib/pkgconfig/*
+          vlc/build/macos-install/lib/vlc/**/*.dylib
+          vlc/build/macos-install/lib/libvlc.dylib
+          vlc/build/macos-install/lib/libvlccore.dylib
+  libvlc-ios-x86_64:
+    runs-on:
+      - self-hosted
+      - monterey
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: x86_64
+      SDKNAME: iphonesimulator
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+      SHORT_ARCH: x86_64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: git clone REDACTED && cd vlc
+    - run: mkdir build && cd build
+    - run: "../extras/package/apple/build.sh --sdk=$SDKNAME --arch=$ARCH -j8 --enable-shared"
+    - run: cd ../..
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/*
+          vlc/build/vlc-$SDKNAME-$SHORT_ARCH/include/*
+  libvlc-ios-arm64:
+    runs-on:
+      - self-hosted
+      - monterey
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: aarch64
+      SDKNAME: iphoneos
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+      SHORT_ARCH: arm64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: git clone REDACTED && cd vlc
+    - run: mkdir build && cd build
+    - run: "../extras/package/apple/build.sh --sdk=$SDKNAME --arch=$ARCH -j8 --enable-shared"
+    - run: cd ../..
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/*
+          vlc/build/vlc-$SDKNAME-$SHORT_ARCH/include/*
+  libvlcsharp-all:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_DEBIAN_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS: "/p:UNITY=true"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: wget REDACTED17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
+    - run: mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
+    - run: export DOTNET_ROOT=$HOME/dotnet
+    - run: export PATH=$PATH:$HOME/dotnet
+    - run: mkdir tmp && cd tmp && git clone REDACTED lvs
+    - run: cd lvs
+    - run: git checkout -f master
+    - run: dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
+    - run: mkdir nightlies
+      if: always()
+    - run: cp -r tmp/lvs/src/LibVLCSharp/bin/Release/netstandard2.0 nightlies
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: nightlies/*
+  libvlcsharp-ios:
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_DEBIAN_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS: "/p:UNITY_IOS=true"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - run: wget REDACTED17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
+    - run: mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
+    - run: export DOTNET_ROOT=$HOME/dotnet
+    - run: export PATH=$PATH:$HOME/dotnet
+    - run: mkdir tmp && cd tmp && git clone REDACTED lvs
+    - run: cd lvs
+    - run: git checkout -f master
+    - run: dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
+    - run: mkdir nightlies
+      if: always()
+    - run: cp -r tmp/lvs/src/LibVLCSharp/bin/Release/netstandard2.0 nightlies
+      if: always()
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: nightlies/*
+  unity-android-armv7:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: armeabi-v7a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-armv7
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-android-armv8:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: arm64-v8a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-armv8
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-android-x86:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: x86
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-x86
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-android-x86_64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ANDROID_ABI: x86_64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-x86_64
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-android-armv7-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS_TRIAL: "-Dwatermark=true"
+      ANDROID_ABI: armeabi-v7a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-armv7
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-android-armv8-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_ANDROID_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS_TRIAL: "-Dwatermark=true"
+      ANDROID_ABI: arm64-v8a
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-android-armv8
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc-android/libvlcjni/libvlc/jni/pkgconfig/${ANDROID_ABI} meson setup --cross-file=cross/android-${ANDROID_ABI}-ndk25.txt build_android_${ANDROID_ABI} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_android_${ANDROID_ABI}
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: |-
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libvlc.so
+          vlc-android/libvlcjni/libvlc/jni/libs/${ANDROID_ABI}/libc++_shared.so
+          vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
+          build_android_${ANDROID_ABI}/PluginSource/libVLCUnityPlugin.so
+  unity-plugin-windows:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      PLATFORM: windows
+      CROSSFILE: windows-x86_64.txt
+      BUILD_FOLDER: win64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-win-x86_64
+    - run: PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${PLATFORM}
+    - run: mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: VLCUnityPlugin.dll
+  unity-plugin-windows-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      PLATFORM: windows
+      CROSSFILE: windows-x86_64.txt
+      ARGS_TRIAL: "-Dwatermark=true"
+      BUILD_FOLDER: win64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-win-x86_64
+    - run: PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${PLATFORM}
+    - run: mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: VLCUnityPlugin.dll
+  unity-plugin-uwp-x64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      PLATFORM: uwp
+      BUILD_FOLDER: win64-uwp
+      CROSSFILE: uwp-x86_64.txt
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-uwp-x64
+    - run: PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${PLATFORM}
+    - run: mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: VLCUnityPlugin.dll
+  unity-plugin-uwp-x64-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      PLATFORM: uwp
+      ARGS_TRIAL: "-Dwatermark=true"
+      BUILD_FOLDER: win64-uwp
+      CROSSFILE: uwp-x86_64.txt
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-uwp-x64
+    - run: PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${PLATFORM}
+    - run: mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: VLCUnityPlugin.dll
+  unity-plugin-uwp-arm64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - docker
+      - amd64
+    container:
+      image: "$VLC_WIN_LLVM_IMAGE"
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      PLATFORM: uwp
+      BUILD_FOLDER: winarm64-uwp
+      CROSSFILE: uwp-arm64.txt
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-uwp-arm64
+    - run: PKG_CONFIG_PATH=./vlc/${BUILD_FOLDER}/_win32/lib/pkgconfig meson setup build_${PLATFORM} --cross-file=cross/${CROSSFILE} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${PLATFORM}
+    - run: mv build_${PLATFORM}/PluginSource/libVLCUnityPlugin-1.dll VLCUnityPlugin.dll
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: VLCUnityPlugin.dll
+  unity-plugin-macos-x86_64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+      - amd64
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: x86_64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-macos-x86_64
+    - run: cd vlc/build/macos-install
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: cd ../../..
+    - run: PKG_CONFIG_PATH=./vlc/build/macos-install/lib/pkgconfig meson setup build_${ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${ARCH}
+    - run: mv "build_${ARCH}/PluginSource/libVLCUnityPlugin.1.dylib" "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
+    - run: install_name_tool -add_rpath @loader_path/ build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+  unity-plugin-macos-x86_64-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+      - amd64
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS_TRIAL: "-Dwatermark=true"
+      ARCH: x86_64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-macos-x86_64
+    - run: cd vlc/build/macos-install
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: cd ../../..
+    - run: PKG_CONFIG_PATH=./vlc/build/macos-install/lib/pkgconfig meson setup build_${ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${ARCH}
+    - run: mv "build_${ARCH}/PluginSource/libVLCUnityPlugin.1.dylib" "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
+    - run: install_name_tool -add_rpath @loader_path/ build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+  unity-plugin-macos-aarch64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+      - macos-m1
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: aarch64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-macos-aarch64
+    - run: cd vlc/build/macos-install
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: cd ../../..
+    - run: PKG_CONFIG_PATH=./vlc/build/macos-install/lib/pkgconfig meson setup build_${ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${ARCH}
+    - run: mv "build_${ARCH}/PluginSource/libVLCUnityPlugin.1.dylib" "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
+    - run: install_name_tool -add_rpath @loader_path/ build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+  unity-plugin-macos-aarch64-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+      - macos-m1
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS_TRIAL: "-Dwatermark=true"
+      ARCH: aarch64
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-macos-aarch64
+    - run: cd vlc/build/macos-install
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: cd ../../..
+    - run: PKG_CONFIG_PATH=./vlc/build/macos-install/lib/pkgconfig meson setup build_${ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${ARCH}
+    - run: mv "build_${ARCH}/PluginSource/libVLCUnityPlugin.1.dylib" "build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib"
+    - run: install_name_tool -add_rpath @loader_path/ build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: build_${ARCH}/PluginSource/libVLCUnityPlugin.dylib
+  unity-plugin-ios-aarch64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: aarch64
+      SDKNAME: iphoneos
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+      SHORT_ARCH: arm64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-ios-arm64
+    - run: cd vlc/build/vlc-$SDKNAME-$SHORT_ARCH
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: cd ../../..
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/pkgconfig meson setup --cross-file=cross/$SDKNAME.txt build_${SHORT_ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${SHORT_ARCH}
+    - run: "./copy_ios.sh vlc/build/vlc-$SDKNAME-$SHORT_ARCH $SHORT_ARCH"
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: Assets/VLCUnity/Plugins/iOS
+  unity-plugin-ios-aarch64-trial:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARGS_TRIAL: "-Dwatermark=true"
+      ARCH: aarch64
+      SDKNAME: iphoneos
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+      SHORT_ARCH: arm64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-ios-arm64
+    - run: cd vlc/build/vlc-$SDKNAME-$SHORT_ARCH
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: cd ../../..
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/pkgconfig meson setup --cross-file=cross/$SDKNAME.txt build_${SHORT_ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${SHORT_ARCH}
+    - run: "./copy_ios.sh vlc/build/vlc-$SDKNAME-$SHORT_ARCH $SHORT_ARCH"
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: Assets/VLCUnity/Plugins/iOS
+  unity-plugin-ios-x86_64:
+    needs:
+    - libvlc-android-armv7
+    - libvlc-android-armv8
+    - libvlc-android-x86
+    - libvlc-android-x86_64
+    - libvlc-win-x86_64-debug
+    - libvlc-win-x86_64
+    - libvlc-uwp-x64
+    - libvlc-uwp-arm64
+    - libvlc-uwp-x64-debug
+    - libvlc-macos-x86_64
+    - libvlc-macos-aarch64
+    - libvlc-ios-x86_64
+    - libvlc-ios-arm64
+    - libvlcsharp-all
+    - libvlcsharp-ios
+    runs-on:
+      - self-hosted
+      - monterey
+    timeout-minutes: 60
+    env:
+      VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
+      VLC_WIN_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-msvcrt:20221214101739
+      VLC_DEBIAN_IMAGE: registry.videolan.org/vlc-debian-unstable:20210803114245
+      VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
+      ARCH: x86_64
+      SDKNAME: iphonesimulator
+      VLC_PATH: "/Users/videolanci/sandbox/bin"
+      SHORT_ARCH: x86_64
+    steps:
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
+    - uses: actions/download-artifact@v4.1.0
+      with:
+        name: libvlc-ios-x86_64
+    - run: cd vlc/build/vlc-$SDKNAME-$SHORT_ARCH
+    - run: sed -i '' "1s|.*|prefix=$(pwd | sed 's#/#\\\/#g')|" lib/pkgconfig/libvlc.pc
+    - run: cd ../../..
+    - run: export PATH="$HOME/sandbox/bin:$PATH"
+    - run: PKG_CONFIG_PATH=./vlc/build/vlc-$SDKNAME-$SHORT_ARCH/lib/pkgconfig meson setup --cross-file=cross/$SDKNAME.txt build_${SHORT_ARCH} ${ARGS_TRIAL} --buildtype release
+    - run: ninja -C build_${SHORT_ARCH}
+    - run: "./copy_ios.sh vlc/build/vlc-$SDKNAME-$SHORT_ARCH $SHORT_ARCH"
+    - uses: actions/upload-artifact@v4.1.0
+      if: success()
+      with:
+        name: "${{ github.job }}"
+        retention-days: 14
+        path: Assets/VLCUnity/Plugins/iOS
