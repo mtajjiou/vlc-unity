@@ -43,7 +43,6 @@ jobs:
           vlc-android/libvlcjni/libvlc/build/intermediates/aar_main_jar/release/classes.jar
   libvlc-android-armv8:
     runs-on:
-      - self-hosted
       - docker
       - amd64
     container:
@@ -516,7 +515,6 @@ jobs:
           vlc/build/vlc-$SDKNAME-$SHORT_ARCH/include/*
   libvlcsharp-all:
     runs-on:
-      - self-hosted
       - docker
       - amd64
     container:
