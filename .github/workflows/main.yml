@@ -68,7 +68,7 @@ jobs:
     - run: mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
     - run: export DOTNET_ROOT=$HOME/dotnet
     - run: export PATH=$PATH:$HOME/dotnet
-    - run: mkdir tmp && cd tmp && git clone REDACTED lvs
+    - run: mkdir tmp && cd tmp && git clone https://code.videolan.org/videolan/LibVLCSharp lvs
     - run: cd lvs
     - run: git checkout -f master
     - run: dotnet build src/LibVLCSharp/LibVLCSharp.csproj ${ARGS} -c Release
