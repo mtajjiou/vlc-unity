@@ -64,7 +64,7 @@ jobs:
       with:
         fetch-depth: 20
         lfs: true
-    - run: wget REDACTED17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
+    - run: wget https://download.visualstudio.microsoft.com/download/pr/17b6759f-1af0-41bc-ab12-209ba0377779/e8d02195dbf1434b940e0f05ae086453/dotnet-sdk-6.0.100-linux-x64.tar.gz
     - run: mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-6.0.100-linux-x64.tar.gz -C $HOME/dotnet
     - run: export DOTNET_ROOT=$HOME/dotnet
     - run: export PATH=$PATH:$HOME/dotnet
