@@ -95,7 +95,7 @@ jobs:
           cd ../..
 
       - name: List build artifacts
-        run: ls -R tmp/lvs/nightlies
+        run: ls -R nightlies
       - uses: actions/upload-artifact@v4.1.0
         if: success()
         with:
