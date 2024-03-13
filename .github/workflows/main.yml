@@ -63,8 +63,8 @@ jobs:
         fetch-depth: 20
         lfs: true
     - run: |
-        git clone REDACTED-android && cd vlc-android
-        git clone REDACTED && cd libvlcjni
+        git clone https://code.videolan.org/videolan/vlc-android && cd vlc-android
+        git clone https://code.videolan.org/videolan/libvlcjni && cd libvlcjni
         git clone REDACTED --depth=1
         git apply ../../patches/no-libvlcjni-build.patch
         cd ..
