@@ -54,14 +54,14 @@ jobs:
       VLC_ANDROID_IMAGE: registry.videolan.org/vlc-debian-android:20230614051113
       ANDROID_ABI: arm64-v8a
     steps:
-    - uses: actions/checkout@v4.1.0
-      with:
-        fetch-depth: 20
-        lfs: true
     - name: Install Git LFS
       run: |
         apt-get update && apt-get install -y git-lfs
         git lfs install
+    - uses: actions/checkout@v4.1.0
+      with:
+        fetch-depth: 20
+        lfs: true
     - run: |
         git clone REDACTED-android && cd vlc-android
         git clone REDACTED && cd libvlcjni
@@ -520,6 +520,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: registry.videolan.org/vlc-debian-unstable:20210803114245
+      options: --user root # Only if necessary and safe to do so
     timeout-minutes: 60
     env:
       VLC_UWP_LLVM_IMAGE: registry.videolan.org/vlc-debian-llvm-ucrt:20230523085945
